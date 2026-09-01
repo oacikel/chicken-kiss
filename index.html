@@ -98,9 +98,9 @@
 
   .stage {
     position: relative;
-    width: min(92vw, 1100px);
+    width: min(50vw, 480px);
     aspect-ratio: 1818 / 797;
-    max-height: 62vh;
+    max-height: 32vh;
     filter: drop-shadow(0 18px 30px rgba(0,0,0,0.35));
   }
   .stage img {
@@ -154,6 +154,27 @@
   @media (max-width: 520px) {
     .kiss-btn { padding: 12px 28px; }
   }
+
+  .smooch-text {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 800;
+    font-size: 34px;
+    color: #ff3d68;
+    text-shadow: 0 0 6px rgba(255,255,255,0.9), 0 0 14px rgba(255,255,255,0.5), 0 4px 10px rgba(0,0,0,0.25);
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg) scale(0.4);
+    transition: transform 0.18s linear, opacity 0.18s linear;
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .smooch-text.flying {
+    transition: transform 0.9s cubic-bezier(0.2, 0.6, 0.3, 1), opacity 0.9s ease;
+  }
 </style>
 </head>
 <body>
@@ -174,31 +195,37 @@
     <div class="hint" id="hint">&nbsp;</div>
   </main>
 
+  <div class="smooch-text" id="smoochText"></div>
+
   <audio id="player" preload="auto"></audio>
 
   <script>
     const BACKGROUNDS = [
       { id: "lake", name: "Lake", file: "assets/images/background_lake.webp" },
-      { id: "space", name: "Space", file: "assets/images/background_space.webp" },
+      { id: "clouds", name: "Clouds", file: "assets/images/background_clouds.webp" },
     ];
     const SOUNDS = [
       "assets/audio/kiss_01.mp3",
       "assets/audio/kiss_02.mp3",
       "assets/audio/kiss_03.mp3",
     ];
+    const WORDS = ["Mwah!", "Smooch!", "Muah!", "Mmmwah~", "Kiss!", "Smack!"];
 
     const bgA = document.getElementById("bgA");
     const bgB = document.getElementById("bgB");
     const bgPicker = document.getElementById("bgPicker");
+    const stage = document.getElementById("stage");
     const imgNoKiss = document.getElementById("imgNoKiss");
     const imgKiss = document.getElementById("imgKiss");
     const kissBtn = document.getElementById("kissBtn");
     const hint = document.getElementById("hint");
     const player = document.getElementById("player");
+    const smoochText = document.getElementById("smoochText");
 
     let activeLayer = bgA;
     let currentBgId = null;
     let isKissing = false;
+    let smoochDir = { x: 0, y: -1 };
 
     function setBackground(bg) {
       if (bg.id === currentBgId) return;
@@ -232,6 +259,47 @@
       return list[Math.floor(Math.random() * list.length)];
     }
 
+    function spawnSmoochText() {
+      const rect = stage.getBoundingClientRect();
+      const kissX = rect.left + rect.width * 0.34;
+      const kissY = rect.top + rect.height * 0.44;
+
+      const angle = Math.random() * Math.PI * 2;
+      smoochDir = { x: Math.cos(angle), y: Math.sin(angle) };
+      const jitter = 8 + Math.random() * 26;
+      const startX = kissX + smoochDir.x * jitter;
+      const startY = kissY + smoochDir.y * jitter;
+      const rotation = (Math.random() * 24 - 12).toFixed(1);
+
+      smoochText.textContent = pickRandom(WORDS);
+      smoochText.style.left = `${startX}px`;
+      smoochText.style.top = `${startY}px`;
+      smoochText.dataset.rotation = rotation;
+      smoochText.classList.remove("flying");
+      smoochText.style.transition = "none";
+      smoochText.style.opacity = "1";
+      smoochText.style.transform = `translate(-50%, -50%) rotate(${rotation}deg) scale(0.4)`;
+      void smoochText.offsetWidth;
+      smoochText.style.transition = "";
+    }
+
+    function growSmoochText() {
+      if (!isKissing || !player.duration) return;
+      const progress = Math.min(player.currentTime / player.duration, 1);
+      const scale = 0.4 + progress * 1.3;
+      const rotation = smoochText.dataset.rotation || 0;
+      smoochText.style.transform = `translate(-50%, -50%) rotate(${rotation}deg) scale(${scale})`;
+    }
+
+    function flyAwaySmoochText() {
+      const flyDist = 110 + Math.random() * 70;
+      const rotation = smoochText.dataset.rotation || 0;
+      smoochText.classList.add("flying");
+      smoochText.style.transform =
+        `translate(-50%, -50%) translate(${smoochDir.x * flyDist}px, ${smoochDir.y * flyDist}px) rotate(${rotation}deg) scale(1.9)`;
+      smoochText.style.opacity = "0";
+    }
+
     function startKiss() {
       if (isKissing) return;
       isKissing = true;
@@ -239,6 +307,7 @@
 
       imgNoKiss.classList.remove("visible");
       imgKiss.classList.add("visible");
+      spawnSmoochText();
 
       const sound = pickRandom(SOUNDS);
       player.src = sound;
@@ -255,9 +324,11 @@
       kissBtn.disabled = false;
       imgKiss.classList.remove("visible");
       imgNoKiss.classList.add("visible");
+      flyAwaySmoochText();
       hint.textContent = " ";
     }
 
+    player.addEventListener("timeupdate", growSmoochText);
     player.addEventListener("ended", endKiss);
     player.addEventListener("error", () => { if (isKissing) endKiss(); });
     kissBtn.addEventListener("click", startKiss);
